@@ -1,0 +1,25 @@
+close all
+highProbToPlot = 0.9;
+
+plotParamComparison(scores, schedules, schedulesParams,highProbToPlot)
+
+flipVol = 49;
+flipStab = 52;
+highProb=0.9;
+
+%% plot one schedule's estimation and scores
+
+j = (schedulesParams.flipVolCand==flipVol);
+k = schedulesParams.flipStabCand==flipStab;
+i = schedulesParams.highProb==highProb;
+
+cues = schedules.cues(j,k,i,:)
+outcomes = schedules.outcomes(j,k,i,:)
+vol = schedules.vol(j,k,i,:)
+probs = schedules.probs(j,k,i,:)
+totalTrials=schedulesParams.totalTrials;
+stateBlockDuration = schedulesParams.stateBlockDuration;
+
+plotBayes=true;
+
+plotModelSelection(cues, outcomes, vol, probs,totalTrials,stateBlockDuration,plotBayes)

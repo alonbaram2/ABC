@@ -1,0 +1,65 @@
+%%
+close all
+clear all
+
+stateBlockDuration = 300;
+totalTrials = 600;
+trialsUntilFlipVol = 20;
+trialsUntilFlipStab = 35; 
+highProb = 0.999;
+[cues, outcomes, vol, probs] = generateData (stateBlockDuration, totalTrials, trialsUntilFlipVol, trialsUntilFlipStab, highProb);
+
+indA = find(cues==0);
+indB = find(cues==1);
+indC = find(cues==2);
+indAC = find (cues==0 | cues==2); 
+indAB = find (cues==0 | cues==1);
+
+% figure
+% plot(indA,probs(cues==0),'r-.^',indC,probs(cues==2),'c-.^',... %indB,probs(cues==1),'b-.^',
+%     [stateBlockDuration*0.5 stateBlockDuration*0.5],[0 1],'--k',[stateBlockDuration stateBlockDuration],[0 1],'--k',...
+%     [stateBlockDuration*1.5 stateBlockDuration*1.5],[0 1],'--k');
+% legend('A','C')
+
+%% run different models
+
+scoreAC = Bayes(probs(cues==0 | cues==2),outcomes(cues==0 | cues==2),vol(cues==0 | cues==2),indAC);
+scoreA = Bayes(probs(cues==0),outcomes(cues==0),vol(cues==0),indA);
+scoreC = Bayes(probs(cues==2),outcomes(cues==2),vol(cues==2),indC);
+
+
+figure
+subplot(3,1,1)
+hold on
+plot(indAC,scoreAC,'.') 
+plot(indA,scoreA,'r.')
+plot(indC,scoreC,'g.')
+plot(indA,outcomes(cues==0)/5+1,'r.','MarkerSize',8)
+plot(indC,outcomes(cues==2)/5+1,'c.','MarkerSize',8)
+plot([stateBlockDuration*0.5 stateBlockDuration*0.5],[0 1],'--k')
+plot([stateBlockDuration stateBlockDuration],[0 1],'--k',[stateBlockDuration*1.5 stateBlockDuration*1.5],[0 1],'--k')
+legend('AC','A','C')
+
+subplot(3,1,2)
+hold on
+scoreSepAC(totalTrials)=0;
+scoreSepAC(indA)=scoreA;
+scoreSepAC(indC)=scoreC;
+scoreSepAC(scoreSepAC==0)=[];
+plot(indAC,scoreAC-scoreSepAC,'-')
+plot([stateBlockDuration*0.5 stateBlockDuration*0.5],[0 1],'--k')
+plot([stateBlockDuration stateBlockDuration],[0 1],'--k',[stateBlockDuration*1.5 stateBlockDuration*1.5],[0 1],'--k')
+plot([0 totalTrials],[0 0])
+
+subplot(3,1,3)
+hold on
+plot(indA,probs(cues==0),'r-.')
+plot(indC,probs(cues==2),'c-.') %indB,probs(cues==1),'b-.^',
+plot([stateBlockDuration*0.5 stateBlockDuration*0.5],[0 1],'--k',[stateBlockDuration stateBlockDuration],[0 1],'--k',...
+    [stateBlockDuration*1.5 stateBlockDuration*1.5],[0 1],'--k');
+legend('A','C')
+
+% figure
+% plot(indA,scoreA,'o',[stateBlockDuration*0.5 stateBlockDuration*0.5],[0 1],'--k',...
+%     [stateBlockDuration stateBlockDuration],[0 1],'--k',[stateBlockDuration*1.5 stateBlockDuration*1.5],[0 1],'--k',...
+%     indA,outcomes(cues==0),'r.','MarkerSize',20)
