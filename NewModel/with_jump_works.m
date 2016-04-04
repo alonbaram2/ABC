@@ -5,7 +5,7 @@
 %
 % Adapted by Erie Boorman.
 % Also see the original .cpp code by Tim Behrens.
-clearvars -except reward
+clearvars -except reward schedules schedulesParams scores
 
 % clc, close all
 
@@ -23,7 +23,7 @@ tic;
 
 %%
 str = 'no jump';
-jump = 0; 
+jumpModel = 0; 
 % p-axis (reward rate)
 pvec = .01:.02:.99;
 pSize = length(pvec);
@@ -70,7 +70,7 @@ end
 
 
 % precompute p(pi+1|pi,Ii+1) for every p_{i+1}, p_i, I_{i+1}
-if jump
+if jumpModel
     pp1gpIp1 = zeros(pSize, pSize, Isize);
     for Ip1=1:Isize
         noJump = eye(pSize).*(1-exp(-Ilog(Ip1)));

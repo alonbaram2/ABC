@@ -29,7 +29,7 @@ qSize = length(qVec);
 % hLog axis (H = 1/v)
 HLog = log(2):0.3:log(10000);
 HSize = length(HLog);
-n
+
 % Mlog axis
 MVec = .01:.05:.99;
 MSize = length(MVec);
