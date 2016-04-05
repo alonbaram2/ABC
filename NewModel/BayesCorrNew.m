@@ -3,32 +3,36 @@ close all
 
 %% 
 
-load('toLoadTest.mat')
+load('toLoadTestShort.mat')
+unmodeledCue = 2 % a numbers from {0,1,2}.
+del = find(cues==unmodeledCue);
+cues(del)=[];
+outcomes(del)=[];
+probs(del)=[];
 
 tic;
 
 %%
 
 % q-axis (reward rate)
-qVec = .01:.02:.99;
+qVec = .01:.05:.99;
 qSize = length(qVec);
 
 % hLog axis (h = 1/v)
-hLog = log(2):0.3:log(10000);
+hLog = log(2):0.5:log(1000);
 hSize = length(hLog);
 
 % mlog axis
-mVec = .01:.05:.99;
+mVec = .01:.08:.99;
 mSize = length(mVec);
 
 % klog axis
-kLog = log(5e-4):0.3:log(20);
+kLog = log(5e-4):0.4:log(0.5);
 kSize = length(kLog);
 
 % qAqBhAhBmk: The joint 6D distribution that we're always updating p(qA, qB, hA, hB, m, k | every
 % observation to date).
 qAqBhAhBmk = ones(qSize, qSize, hSize, hSize, mSize, kSize) ./ (qSize*qSize*hSize*hSize*mSize*kSize);
-
 
 qADist = zeros(length(outcomes),qSize);
 qBDist = zeros(length(outcomes),qSize);
@@ -97,7 +101,7 @@ qBp1gqBqAhBmp1T(:,:,:,:,:,1) = qAp1gqAqBhAmp1T(:,:,:,:,:,2);
    
 %%
 
-display('start Bayesian updating')
+sprintf('start Bayesian updating')
 toc
 
 %
@@ -130,7 +134,7 @@ for t = 1:length(outcomes)
     % now do normalization
     qAqBhAhBmk = qAqBhAhBmk ./ sum(sum(sum(sum(sum(sum(qAqBhAhBmk))))));
     
-        % GET mARGINALS
+        % GET MARGINALS
     %
     
     % qA
@@ -170,7 +174,7 @@ for t = 1:length(outcomes)
     % INFORMATION LEAK (increase the variance in the joint distribution)
     %
     
-    display('Information Leak, trial = %d',t)
+    sprintf('Information Leak, trial = %d',t)
     toc
     
     % I) multiply qAqBhAhBmk by mp1gmk, and integrate out m. This will give qAqBhAhBmp1k.
@@ -188,7 +192,7 @@ for t = 1:length(outcomes)
             end
         end
         
-        sprintf('end stage 1, k = %d',k)
+        sprintf('end stage 1, k = %d, trial = %d',k,t)
         toc
         
         % II) multiply qAqBhAhBmp1k (pIp1k) by qAp1gqAqBhAmp1T (pp1gpIp1) and integrate out qA, 
@@ -205,7 +209,7 @@ for t = 1:length(outcomes)
                 end
             end
         end
-    sprintf('end stage 2, k = %d',k)
+    sprintf('end stage 2, k = %d, trial = %d',k,t)
     toc       
         
         % III) multiply qAp1qBp1hAhBmp1k by qBp1gqBqAhBmp1T and integrate out qB, 
@@ -223,7 +227,7 @@ for t = 1:length(outcomes)
             end
         end        
         
-    sprintf('end stage 3, k = %d',k)
+    sprintf('end stage 3, k = %d, trial = %d',k,t)
     toc       
         % IV) Place qAp1qBp1hAhBmp1k into qAqBhAhBmp1k (belief that is carried to the next
         % trial).
@@ -232,15 +236,15 @@ for t = 1:length(outcomes)
     end
     sprintf('end Bayesian update, trial = %d',t)
     toc       
- end
-
+end
+ 
 timeOverall = toc
 
-blocks201 = struct('qADist',qADist,'qBDist',qBDist,'hADist',hADist,'hBDist',hBDist,'mDist',mDist,'kDist',kDist,...
+test = struct('qADist',qADist,'qBDist',qBDist,'hADist',hADist,'hBDist',hBDist,'mDist',mDist,'kDist',kDist,...
                     'qAEst',qAEst,'qBEst',qBEst,'hAEst',hAEst,'hBEst',hBEst,'vAEst',vAEst,'vBEst',vBEst,'mEst',mEst,'kEst',kEst,...
-                    'hAEstExp',hAEstExp,'hBEstExp',hBEstExp,'vAEstExp',vAEstExp,'vBEstExp',vBEstExp,'kEstExp',kEstExp,'elapsedTime',elapsedTime);
+                    'hAEstExp',hAEstExp,'hBEstExp',hBEstExp,'vAEstExp',vAEstExp,'vBEstExp',vBEstExp,'kEstExp',kEstExp,'timeOverall',timeOverall);
 
-save('blocks201.mat','blocks201')               
+save('test.mat','test')               
 % 
 % % make some plots
 % X = 1:length(reward);
