@@ -1,34 +1,41 @@
-  
-close all
 
-%% 
+% close all
 
-sesName = 'Full0704_1000.mat';
-load(strcat('toLoad',sesName));
-unmodeledCue = 2; % a numbers from {0,1,2}.
-del = find(cues==unmodeledCue);
-cues(del)=[];
-outcomes(del)=[];
-probs(del)=[];
+%%
+% 
+sesName = 'AOnlyVol_.mat';
+% load(strcat('toLoad',sesName));
+% unmodeledCue = 2; % a numbers from {0,1,2}.
+% del = find(cues==unmodeledCue);
+% cues(del)=[];
+% outcomes(del)=[];
+% probs(del)=[];
 
 tic;
 
 %%
 
+mLogModel = 0; % 0 is -1 < m < 1 in normal space, 1 is 0 < m < 1 in log space.
+
 % q-axis (reward rate)
-qVec = .01:.05:.99;
+qVec = .01:.1:.99;
 qSize = length(qVec);
 
-% hLog axis 
-hLog = log(1/1000):0.6:log(1/2);
+% hLog axis
+hLog = log(1/1000):0.8:log(1/2);
 hSize = length(hLog);
 
-% m-axis
-mLog = log(1/10000):0.5:log(1/2);
-mSize = length(mLog);
+% m-axis  %to have the sime mSize=14 in both options choose resolutions of
+% .65 and .15 respectively.
+if mLogModel
+    mVec = log(1/10000):0.65:log(1/2);
+else
+    mVec = -.99:.15:.99;
+end 
+mSize = length(mVec);
 
 % klog axis
-kLog = log(5e-4):0.7:log(0.5);
+kLog = log(5e-4):0.9:log(0.5);
 kSize = length(kLog);
 
 % qAqBhAhBmk: The joint 6D distribution that we're always updating p(qA, qB, hA, hB, m, k | every
@@ -45,14 +52,10 @@ qAEst = zeros(1,length(outcomes));
 qBEst = zeros(1,length(outcomes));
 hAEst = zeros(1,length(outcomes));
 hBEst = zeros(1,length(outcomes));
-vAEst = zeros(1,length(outcomes));
-vBEst = zeros(1,length(outcomes));
 mEst = zeros(1,length(outcomes));
 kEst = zeros(1,length(outcomes));
 hAEstExp = zeros(1,length(outcomes));
 hBEstExp = zeros(1,length(outcomes));
-vAEstExp = zeros(1,length(outcomes));
-vBEstExp = zeros(1,length(outcomes));
 mEstExp = zeros(1,length(outcomes));
 kEstExp = zeros(1,length(outcomes));
 
@@ -64,48 +67,56 @@ for k = 1 : kSize
         for mp1 = 1:mSize
             %  N(m_{i},k2)
             var = exp(kLog(k)*2); % k is stdev
-            tmpM(mp1, m) = (exp(-power((mLog(m) - mLog(mp1)),2)/(2*var))) / (sqrt(2*pi*var));
+            tmpM(mp1, m) = (exp(-power((mVec(m) - mVec(mp1)),2)/(2*var))) / (sqrt(2*pi*var));
         end
         % normalise so p(m_i+1|m_i,k) sums to 1;
         tmpM(:,m) = tmpM(:,m)./sum(tmpM(:,m));
     end
-
+    
     mp1gmk(:,:,k) = tmpM; % place tmpm in it.
 end
 
-% precompute p(qA_{i+1}|qA_i,qB_i,hA, m_{i+1}, T_{i+1)
+% precompute p(qA_{i+1}|qA_i,hA, T_{i+1) = 1)  
 
-qAp1gqAqBhAmp1T = zeros(qSize, qSize, qSize, hSize, mSize, 2);
-qBp1gqBqAhBmp1T = zeros(qSize, qSize, qSize, hSize, mSize, 2);
-for  hA = 1:hSize
+qAp1gqAhAT1 = zeros(qSize, qSize, hSize);
+
+for hA = 1:hSize
+    jump = (ones(qSize)./qSize).*(exp(hLog(hA)));
+    noJump = eye(qSize).*(1-exp(hLog(hA)));
+    qAp1gqAhAT1(:,:,hA) = jump + noJump;
+end
+% precompute p(qB_{i+1}|qB_i,hB, T_{i+1) = 2)  
+qBp1gqBhBT2 = qAp1gqAhAT1;
+
+% precompute p(qA_{i+1}|qA_i,qB_i,m_{i+1}, T_{i+1) = 2)
+qAp1gqAqBmp1T2 = zeros(qSize, qSize, qSize, mSize);
+if mLogModel == 1
     for mp1 = 1:mSize
-        jump = (ones(qSize)./qSize).*(exp(hLog(hA)));
-        for qB=1:qSize            
-            T = 1; % Current cue is A
-            noJump = eye(qSize).*(1-exp(hLog(hA)));
-            qAp1gqAqBhAmp1T(:,:,qB,hA,mp1,T) = jump + noJump;
-            
-            T = 2; % Current cue is B
-            noJumpCorrWeighted = eye(qSize).*(1-exp(hLog(hA))).*(1-exp(mLog(mp1)));
-%             noJumpCorrWeighted = eye(qSize).*(1-exp(-hLog(hA))).*(1-mLog(mp1));
-            qAp1gqAqBhAmp1T(:,:,qB,hA,mp1,T) = jump + noJumpCorrWeighted;
+        for qB = 1:qSize
+            qAp1gqAqBmp1T2(:,:,qB,mp1) = eye(qSize).*(1-exp(mVec(mp1)));
         end
-        T = 2;
-        for qA=1:qSize
-            corrInfluence = eye(qSize).*(1-exp(hLog(hA))).*(exp(mLog(mp1)));            
-%             corrInfluence = eye(qSize).*(1-exp(-hLog(hA))).*(mLog(mp1));            
-            qAp1gqAqBhAmp1T(:,qA,:,hA,mp1,T) = qAp1gqAqBhAmp1T(:,qA,:,hA,mp1,T) + permute(corrInfluence,[1,3,2]);
+        for qA = 1:qSize
+            qAp1gqAqBmp1T2(:,qA,:,mp1) = qAp1gqAqBmp1T2(:,qA,:,mp1) + permute(eye(qSize).*(exp(mVec(mp1))),[1,3,2]);
+        end
+    end
+elseif mLogModel == 0 
+    for mp1 = 1:mSize
+        for qA = 1:qSize
+            for qB = 1:qSize
+                tmp = (1-abs(mVec(mp1)))*(qVec(qA)-0.5) + (mVec(mp1))*(qVec(qB) - 0.5) + 0.5;
+                [~, qAp1] = min(power((qVec-tmp),2));
+                qAp1gqAqBmp1T2(qAp1,qA,qB,mp1) = 1;
+            end
         end
     end
 end
 
- %p(qB_{i+1}|qB_i,qA_i,hB, m_{i+1}, T_i) is symmetrical for switching A and B 
-qBp1gqBqAhBmp1T(:,:,:,:,:,2) = qAp1gqAqBhAmp1T(:,:,:,:,:,1);
-qBp1gqBqAhBmp1T(:,:,:,:,:,1) = qAp1gqAqBhAmp1T(:,:,:,:,:,2);
-   
+% precompute p(qB_{i+1}|qB_i,qA_i,m_{i+1}, T_{i+1) = 1)
+qBp1gqBqAmp1T1 = qAp1gqAqBmp1T2;
+
 %%
 
-sprintf('start Bayesian updating')
+display(sprintf('start Bayesian updating'))
 toc
 
 %
@@ -132,135 +143,158 @@ for t = 1:length(outcomes)
         T = 2;
         for qB=1:qSize
             qAqBhAhBmk(:,qB,:,:,:,:) = qAqBhAhBmk(:,qB,:,:,:,:)*(1-qVec(qB));
-        end              
+        end
     end
-        
+    
     % now do normalization
     qAqBhAhBmk = qAqBhAhBmk ./ sum(sum(sum(sum(sum(sum(qAqBhAhBmk))))));
     
     
-        % GET MARGINALS
+    % GET MARGINALS
     
     % qA
     qADist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,6),5),4),3),2);
     qAEst(t)  = sum(qADist(t,:).*qVec);
     % qB
     qBDist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,6),5),4),3),1);
-    qBEst(t)  = sum(qBDist(t,:).*qVec);        
+    qBEst(t)  = sum(qBDist(t,:).*qVec);
     % hA
     hADist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,6),5),4),2),1);
     hAEst(t)  = sum(hADist(t,:).*hLog);
-    vAEst(t)  = sum(hADist(t,:).*(-hLog));    
     hAEstExp(t)  = sum(hADist(t,:).*exp(hLog));
-    vAEstExp(t)  = sum(hADist(t,:).*exp(-hLog));   
     % hB
     hBDist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,6),5),3),2),1);
     hBEst(t)  = sum(hBDist(t,:).*hLog);
-    vBEst(t)  = sum(hBDist(t,:).*(-hLog));    
     hBEstExp(t)  = sum(hBDist(t,:).*exp(hLog));
-    vBEstExp(t)  = sum(hBDist(t,:).*exp(-hLog));        
     % m
     mDist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,6),4),3),2),1);
-    mEst(t)  = sum(mDist(t,:).*mLog);
-    mEstExp(t) = sum(mDist(t,:).*exp(mLog));
+    mEstExp(t) = sum(mDist(t,:).*exp(mVec));
+    mEst(t)  = sum(mDist(t,:).*mVec);
     % k
     kDist(t,:) = sum(sum(sum(sum(sum(qAqBhAhBmk,5),4),3),2),1);
     kEst(t)  = sum(kDist(t,:).*kLog);
     kEstExp(t) = sum(kDist(t,:).*exp(kLog));
-
+    
     
     % INFORMATION LEAK (increase the variance in the joint distribution)
     %
     
-%     sprintf('Information Leak, trial = %d',t)
-%     toc
-%     
+    %     sprintf('Information Leak, trial = %d',t)
+    %     toc
+    %
     % I) multiply qAqBhAhBmk by mp1gmk, and integrate out m. This will give qAqBhAhBmp1k.
+    
     for k = 1:kSize
         qAqBhAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);
         for mp1 = 1:mSize
             for hA = 1:hSize
                 for hB = 1:hSize
                     for qA = 1:qSize
-                        for qB = 1:qSize                            
-                             qAqBhAhBmp1k(qA,qB,hA,hB,mp1) = sum(squeeze(mp1gmk(mp1,:,k)).*squeeze(qAqBhAhBmk(qA,qB,hA,hB,:,k))');
+                        for qB = 1:qSize
+                            qAqBhAhBmp1k(qA,qB,hA,hB,mp1) = sum(reshape(mp1gmk(mp1,:,k),mSize,1).*reshape(qAqBhAhBmk(qA,qB,hA,hB,:,k),mSize,1));
                         end
                     end
                 end
             end
         end
         
-%         sprintf('end stage 1, k = %d, trial = %d',k,t)
-%         toc
-%         
-        % II) multiply qAqBhAhBmp1k (pIp1k) by qAp1gqAqBhAmp1T (pp1gpIp1) and integrate out qA, 
+        %         sprintf('end stage 1, k = %d, trial = %d',k,t)
+        %         toc
+        %
+        % II) multiply qAqBhAhBmp1k (pIp1k) by qAp1gqAqBhAmp1T (pp1gpIp1) and integrate out qA,
         % This will give qAp1qBhAhBmp1k (pp1Ip1k).
-        tmp = zeros(qSize,qSize,qSize,qSize,hSize,hSize,mSize);
-        qAp1qBp1hAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);        
-
-        for mp1 = 1:mSize
-            for hA = 1:hSize
-                for hB = 1:hSize
-                    for qAp1 = 1:qSize
-                        for qBp1 = 1:qSize
+        tmp = zeros(qSize,qSize,qSize,qSize,hSize,mSize);
+        qAp1qBp1hAmp1k = zeros(qSize,qSize,hSize,mSize);
+        
+        if T==1
+            qAp1qBp1hAmp1k = zeros(qSize,qSize,hSize,mSize);
+            qAqBhAmp1k = reshape(sum(qAqBhAhBmp1k,4),[qSize,qSize,hSize,mSize]);
+            for qAp1 = 1:qSize
+                for qBp1 = 1:qSize
+                    for hA = 1:hSize
+                        for mp1 = 1:mSize
                             for qA = 1:qSize
                                 for qB = 1:qSize
-                                    tmp(qAp1,qBp1,qA,qB,hA,hB,mp1) = (qAqBhAhBmp1k(qA,qB,hA,hB,mp1)*qAp1gqAqBhAmp1T(qAp1,qA,qB,hA,mp1,T)) * qBp1gqBqAhBmp1T(qBp1,qB,qA,hB,mp1,T);
+                                    tmp(qAp1,qBp1,qA,qB,hA,mp1) = qAqBhAmp1k(qA,qB,hA,mp1)*...
+                                        qAp1gqAhAT1(qAp1,qA,hA)*qBp1gqBqAmp1T1(qBp1,qB,qA,mp1);
                                 end
                             end
-                            qAp1qBp1hAhBmp1k(qAp1,qBp1,hA,hB,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hA,hB,mp1),4),3);
-%                             qAp1qBhAhBmp1k(qAp1,qB,hA,hB,mp1) = sum(squeeze(qAqBhAhBmp1k(:,qB,hA,hB,mp1)).*squeeze(qAp1gqAqBhAmp1T(qAp1,:,qB,hA,mp1,T))');
-                        end   
+                            qAp1qBp1hAmp1k(qAp1,qBp1,hA,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hA,mp1),4),3);
+                        end
                     end
                 end
             end
+            for hB = 1:hSize
+                qAqBhAhBmk(:,:,:,hB,:,k) = permute(qAp1qBp1hAmp1k,[1 2 3 5 4 6]);
+            end
+            
+        elseif T==2
+            qAp1qBp1hBmp1k = zeros(qSize,qSize,hSize,mSize);        
+            qAqBhBmp1k = reshape(sum(qAqBhAhBmp1k,3),[qSize,qSize,hSize,mSize]);
+            for qAp1 = 1:qSize
+                for qBp1 = 1:qSize
+                    for hB = 1:hSize
+                        for mp1 = 1:mSize
+                            for qA = 1:qSize
+                                for qB = 1:qSize
+                                    tmp(qAp1,qBp1,qA,qB,hB,mp1) = qAqBhBmp1k(qA,qB,hB,mp1)*qBp1gqBhBT2(qBp1,qB,hB)*qAp1gqAqBmp1T2(qAp1,qA,qB,mp1);
+                                end
+                            end
+                            qAp1qBp1hBmp1k(qAp1,qBp1,hB,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hB,mp1),4),3);
+                        end
+                    end
+                end
+            end
+            for hA = 1:hSize
+                qAqBhAhBmk(:,:,hA,:,:,k) = permute(qAp1qBp1hBmp1k,[1 2 5 3 4 6]);
+            end
         end
-%         sprintf('end stage 2, k = %d, trial = %d',k,t)
-%         toc       
-%         
-%         % III) multiply qAp1qBp1hAhBmp1k by qBp1gqBqAhBmp1T and integrate out qB, 
-%         % This will give qAp1qBp1hAhBmp1k (pp1Ip1k).  
-%         qAp1qBp1hAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);        
-%         for mp1 = 1:mSize
-%             for hA = 1:hSize
-%                 for hB = 1:hSize
-%                     for qAp1 = 1:qSize
-%                         for qBp1 = 1:qSize         
-%                             qAp1qBp1hAhBmp1k(qAp1,qBp1,hA,hB,mp1) = sum(squeeze(qAp1qBhAhBmp1k(qAp1,:,hA,hB,mp1)).*squeeze(qBp1gqBqAhBmp1T(qBp1,:,qAp1,hB,mp1,T))); % the last qApq should actually be qA but it's the same index so it doesn't matter.
-%                         end
-%                     end
-%                 end
-%             end
-%         end        
-%         
-%     sprintf('end stage 3, k = %d, trial = %d',k,t)
-%         toc       
+        
+        
+        
+        %         sprintf('end stage 2, k = %d, trial = %d',k,t)
+        %         toc
+        %
+        %         % III) multiply qAp1qBp1hAhBmp1k by qBp1gqBqAhBmp1T and integrate out qB,
+        %         % This will give qAp1qBp1hAhBmp1k (pp1Ip1k).
+        %         qAp1qBp1hAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);
+        %         for mp1 = 1:mSize
+        %             for hA = 1:hSize
+        %                 for hB = 1:hSize
+        %                     for qAp1 = 1:qSize
+        %                         for qBp1 = 1:qSize
+        %                             qAp1qBp1hAhBmp1k(qAp1,qBp1,hA,hB,mp1) = sum(squeeze(qAp1qBhAhBmp1k(qAp1,:,hA,hB,mp1)).*squeeze(qBp1gqBqAhBmp1T(qBp1,:,qAp1,hB,mp1,T))); % the last qApq should actually be qA but it's the same index so it doesn't matter.
+        %                         end
+        %                     end
+        %                 end
+        %             end
+        %         end
+        %
+        %     sprintf('end stage 3, k = %d, trial = %d',k,t)
+        %         toc
         % IV) Place qAp1qBp1hAhBmp1k into qAqBhAhBmqk (belief that is carried to the next
         % trial).
-        qAqBhAhBmk(:,:,:,:,:,k) = qAp1qBp1hAhBmp1k;
-             
+        
     end
-    sprintf('end Bayesian update, trial = %d',t)
-    toc       
+    display(sprintf('end Bayesian update, trial = %d',t))
+    toc
 end
- 
-timeOverall = toc
 
-% test = struct('qADist',qADist,'qBDist',qBDist,'hADist',hADist,'hBDist',hBDist,'mDist',mDist,'kDist',kDist,...
-%                     'qAEst',qAEst,'qBEst',qBEst,'hAEst',hAEst,'hBEst',hBEst,'vAEst',vAEst,'vBEst',vBEst,'mEst',mEst,'kEst',kEst,...
-%                     'hAEstExp',hAEstExp,'hBEstExp',hBEstExp,'vAEstExp',vAEstExp,'vBEstExp',vBEstExp,'kEstExp',kEstExp,'timeOverall',timeOverall);
+timeTotal = toc
+
+modelStr = sprintf('h0m%d',mLogModel); % h0 is for no jump on oppite trial, m0 is for normal space prior for m with the option rof anti-correlation. 
+
+save(strcat(modelStr,sesName),'qADist','qBDist','hADist','hBDist','mDist','kDist',...
+    'qAEst','qBEst','hAEst','hBEst','vAEst','vBEst','mEst','kEst',...
+    'hAEstExp','hBEstExp','vAEstExp','vBEstExp','mEstExp','kEstExp','timeTotal',...
+    'qVec','hLog','mVec','kLog','cues','outcomes','probs','mLogModel');
 % 
-save(strcat('test',sesName),'qADist','qBDist','hADist','hBDist','mDist','kDist',...
-                    'qAEst','qBEst','hAEst','hBEst','vAEst','vBEst','mEst','kEst',...
-                    'hAEstExp','hBEstExp','vAEstExp','vBEstExp','kEstExp','timeOverall',...
-                    'qVec','hLog','mLog','kLog','cues','outcomes','probs');               
-
-
+% 
 
 
 % % make some plots
 % X = 1:length(reward);
-% 
+%
 % figure
 % suptitle(str)
 % subplotNum = 6;
@@ -277,7 +311,7 @@ save(strcat('test',sesName),'qADist','qBDist','hADist','hBDist','mDist','kDist',
 % plot(X(reward==0),vEst(reward==0),'.r',X(reward==1),vEst(reward==1),'.b') , title('vEst')
 % subplot(subplotNum,1,6)
 % plot(X(reward==0),vEstExp(reward==0),'.r',X(reward==1),vEstExp(reward==1),'.b') , title('vEstExp (the important one)')
-% 
+%
 % figure
 % suptitle(str)
 % hold on
@@ -285,15 +319,15 @@ save(strcat('test',sesName),'qADist','qBDist','hADist','hBDist','mDist','kDist',
 % plot (kEst) , title('kEst')
 % subplot(2,1,2)
 % plot(kEstExp), title('kEstExp')
-% 
-% 
+%
+%
 % probSched = [ones(1,120)'*.75; ones(1,40)'*.20; ones(1,40)'*.80; ones(1,40)'*.20; ones(1,40)'*.80]; % experimental setup
 % %probSchedAdvice = [ones(1,30)'*.75; ones(1,10)'*.20; ones(1,10)'*.80; ones(1,10)'*.20; ones(1,10)'*.80; ones(1,50)'*.15];
 % figure, plot(X(reward==0),pEst(reward==0),'.r',X(reward==1),pEst(reward==1),'.b') % reward rate
 % suptitle(str)
 % hold on, plot(probSched,'r')
 % ylim([0 1])
-% 
-% 
-% 
-% 
+%
+%
+%
+%
