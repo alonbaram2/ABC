@@ -3,13 +3,14 @@
 
 %%
 % 
-sesName = 'AOnlyVol_.mat';
+% AntiCorrStabTotal.mat CorrStabTotal.mat AntiCorrVol10.mat CorrVol10Long.mat h0m0AOnlyVol.mat
+sesName = 'AC2C8-2ContM.mat';
 % load(strcat('toLoad',sesName));
-% unmodeledCue = 2; % a numbers from {0,1,2}.
-% del = find(cues==unmodeledCue);
-% cues(del)=[];
-% outcomes(del)=[];
-% probs(del)=[];
+unmodeledCue = 2; % a numbers from {0,1,2}.
+del = find(cues==unmodeledCue);
+cues(del)=[];
+outcomes(del)=[];
+probs(del)=[];
 
 tic;
 
@@ -27,7 +28,7 @@ hSize = length(hLog);
 
 % m-axis  %to have the sime mSize=14 in both options choose resolutions of
 % .65 and .15 respectively.
-if mLogModel
+if mLogModel==1
     mVec = log(1/10000):0.65:log(1/2);
 else
     mVec = -.99:.15:.99;
@@ -35,7 +36,7 @@ end
 mSize = length(mVec);
 
 % klog axis
-kLog = log(5e-4):0.9:log(0.5);
+kLog = log(3e-2):0.9:log(0.5);
 kSize = length(kLog);
 
 % qAqBhAhBmk: The joint 6D distribution that we're always updating p(qA, qB, hA, hB, m, k | every
@@ -203,51 +204,69 @@ for t = 1:length(outcomes)
         %
         % II) multiply qAqBhAhBmp1k (pIp1k) by qAp1gqAqBhAmp1T (pp1gpIp1) and integrate out qA,
         % This will give qAp1qBhAhBmp1k (pp1Ip1k).
-        tmp = zeros(qSize,qSize,qSize,qSize,hSize,mSize);
-        qAp1qBp1hAmp1k = zeros(qSize,qSize,hSize,mSize);
         
         if T==1
-            qAp1qBp1hAmp1k = zeros(qSize,qSize,hSize,mSize);
-            qAqBhAmp1k = reshape(sum(qAqBhAhBmp1k,4),[qSize,qSize,hSize,mSize]);
+            tmp = zeros(qSize,qSize,qSize,qSize,hSize,hSize,mSize);           
+            qAp1qBp1hAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);
             for qAp1 = 1:qSize
                 for qBp1 = 1:qSize
                     for hA = 1:hSize
                         for mp1 = 1:mSize
                             for qA = 1:qSize
                                 for qB = 1:qSize
-                                    tmp(qAp1,qBp1,qA,qB,hA,mp1) = qAqBhAmp1k(qA,qB,hA,mp1)*...
+                                    tmp(qAp1,qBp1,qA,qB,hA,:,mp1) = qAqBhAhBmp1k(qA,qB,hA,:,mp1)*...
                                         qAp1gqAhAT1(qAp1,qA,hA)*qBp1gqBqAmp1T1(qBp1,qB,qA,mp1);
                                 end
                             end
-                            qAp1qBp1hAmp1k(qAp1,qBp1,hA,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hA,mp1),4),3);
+                            qAp1qBp1hAhBmp1k(qAp1,qBp1,hA,:,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hA,:,mp1),4),3);
                         end
                     end
                 end
             end
-            for hB = 1:hSize
-                qAqBhAhBmk(:,:,:,hB,:,k) = permute(qAp1qBp1hAmp1k,[1 2 3 5 4 6]);
-            end
+            qAqBhAhBmk(:,:,:,:,:,k) = qAp1qBp1hAhBmp1k;
             
         elseif T==2
-            qAp1qBp1hBmp1k = zeros(qSize,qSize,hSize,mSize);        
-            qAqBhBmp1k = reshape(sum(qAqBhAhBmp1k,3),[qSize,qSize,hSize,mSize]);
+            
+            tmp = zeros(qSize,qSize,qSize,qSize,hSize,hSize,mSize);            
+            qAp1qBp1hAhBmp1k = zeros(qSize,qSize,hSize,hSize,mSize);        
             for qAp1 = 1:qSize
                 for qBp1 = 1:qSize
                     for hB = 1:hSize
                         for mp1 = 1:mSize
                             for qA = 1:qSize
                                 for qB = 1:qSize
-                                    tmp(qAp1,qBp1,qA,qB,hB,mp1) = qAqBhBmp1k(qA,qB,hB,mp1)*qBp1gqBhBT2(qBp1,qB,hB)*qAp1gqAqBmp1T2(qAp1,qA,qB,mp1);
+                                    tmp(qAp1,qBp1,qA,qB,:,hB,mp1) = qAqBhAhBmp1k(qA,qB,:,hB,mp1)*qBp1gqBhBT2(qBp1,qB,hB)*qAp1gqAqBmp1T2(qAp1,qA,qB,mp1);
                                 end
                             end
-                            qAp1qBp1hBmp1k(qAp1,qBp1,hB,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hB,mp1),4),3);
+                            qAp1qBp1hAhBmp1k(qAp1,qBp1,:,hB,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,:,hB,mp1),4),3);
                         end
                     end
                 end
             end
-            for hA = 1:hSize
-                qAqBhAhBmk(:,:,hA,:,:,k) = permute(qAp1qBp1hBmp1k,[1 2 5 3 4 6]);
-            end
+            qAqBhAhBmk(:,:,:,:,:,k) = qAp1qBp1hAhBmp1k;
+
+            
+            
+%             tmp = zeros(qSize,qSize,qSize,qSize,hSize,mSize);            
+%             qAp1qBp1hBmp1k = zeros(qSize,qSize,hSize,mSize);        
+%             qAqBhBmp1k = reshape(sum(qAqBhAhBmp1k,3),[qSize,qSize,hSize,mSize]);
+%             for qAp1 = 1:qSize
+%                 for qBp1 = 1:qSize
+%                     for hB = 1:hSize
+%                         for mp1 = 1:mSize
+%                             for qA = 1:qSize
+%                                 for qB = 1:qSize
+%                                     tmp(qAp1,qBp1,qA,qB,hB,mp1) = qAqBhBmp1k(qA,qB,hB,mp1)*qBp1gqBhBT2(qBp1,qB,hB)*qAp1gqAqBmp1T2(qAp1,qA,qB,mp1);
+%                                 end
+%                             end
+%                             qAp1qBp1hBmp1k(qAp1,qBp1,hB,mp1) = sum(sum(tmp(qAp1,qBp1,:,:,hB,mp1),4),3);
+%                         end
+%                     end
+%                 end
+%             end
+%             for hA = 1:hSize
+%                 qAqBhAhBmk(:,:,hA,:,:,k) = permute(qAp1qBp1hBmp1k,[1 2 5 3 4 6]);
+%             end
         end
         
         
@@ -287,7 +306,7 @@ modelStr = sprintf('h0m%d',mLogModel); % h0 is for no jump on oppite trial, m0 i
 save(strcat(modelStr,sesName),'qADist','qBDist','hADist','hBDist','mDist','kDist',...
     'qAEst','qBEst','hAEst','hBEst','vAEst','vBEst','mEst','kEst',...
     'hAEstExp','hBEstExp','vAEstExp','vBEstExp','mEstExp','kEstExp','timeTotal',...
-    'qVec','hLog','mVec','kLog','cues','outcomes','probs','mLogModel');
+    'qVec','hLog','mVec','kLog','cues','outcomes','probs','mLogModel','sesName');
 % 
 % 
 
